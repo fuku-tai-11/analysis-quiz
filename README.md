@@ -47,7 +47,11 @@ APIキーの取得、`.env` の作成、外部AIサービスの契約は不要�
 npm run build
 ```
 
-`dist/` に配信に必要なファイルだけを作成します。GitHub Pagesなど静的ファイルを置ける環境でも使える構成です。APIサーバーやVercelは不要です。今回の作業はGitHubへのソースコード保存までで、サイト公開の設定はしていません。
+`dist/` に配信に必要なファイルだけを作成します。APIサーバーやVercelは不要です。GitHub Pagesへの公開は `.github/workflows/pages.yml` で行い、mainへの更新時にテスト・ビルド後、distのみを配信します。
+
+公開先：https://fuku-tai-11.github.io/analysis-quiz-showcase/
+
+公開の進捗はGitHubのActions、公開先のURLはSettings → Pagesで確認できます。
 
 `dist/` は生成物なのでGitHubには保存しません。数式は [KaTeX](https://katex.org/) を使用し、ライセンスも生成物に含めます。HTMLをダブルクリックする方法ではなく、HTTPサーバーで配信してください。
 
