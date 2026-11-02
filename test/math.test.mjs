@@ -21,7 +21,7 @@ test('明示したLaTeXと日本語を分離し、LaTeXは再変換しない',()
   assert.equal(list.find(p=>p.tex).tex,'\\int_1^\\infty \\frac{1}{x^2}\\,dx');
   assert.equal(list.map(p=>p.text).join(''),'次を計算：\\(\\int_1^\\infty \\frac{1}{x^2}\\,dx\\) です。');
 });
-test('全27問の問題・解説・ヒント・具体例を数式エラーなく組版できる',()=>{
+test('全54問の問題・解説・ヒント・具体例を数式エラーなく組版できる',()=>{
   for(const q of bank)for(const key of ['question','hint','answer','example','pitfall','steps','checklist'])for(const text of [q[key]].flat()){
     const segments=mathSegments(text);assert.equal(segments.map(p=>p.text).join(''),text);
     for(const p of segments)if(p.tex)assert.doesNotThrow(()=>katex.renderToString('\\displaystyle '+p.tex,{throwOnError:true,strict:'error',trust:false}),`${q.id}: ${p.text}`);

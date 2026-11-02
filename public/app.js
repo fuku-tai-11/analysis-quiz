@@ -1,4 +1,6 @@
-import katex from '/vendor/katex/katex.mjs';
+import katex from './vendor/katex/katex.mjs';
+import {bank} from './lib/bank.mjs';
+import {selectQuestions} from './lib/quiz.mjs';
 import {renderMathText} from './math.js';
 globalThis.katex=katex;
 const $=s=>document.querySelector(s);
@@ -6,19 +8,22 @@ let session=null;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const mathEl=(tag,text,cls)=>{const n=el(tag,undefined,cls);renderMathText(n,text);return n;};
 const btn=(text,fn,cls)=>{const b=el('button',text,cls);b.type='button';b.onclick=fn;return b;};
-async function init(){try{const r=await fetch('/api/status');const s=await r.json();$('#ai-status').textContent=s.aiEnabled?'AI出題：設定済み（API利用料が発生します）':'AI出題：未設定 / 収録問題はそのまま使えます';}catch{$('#ai-status').textContent='サーバーに接続できません。npm start で起動してください。';}}
-$('#settings').onsubmit=async e=>{
+$('#bank-status').textContent=`収録${bank.length}問 / APIキー不要・API利用料なし`;
+$('#settings').onsubmit=e=>{
   e.preventDefault();
   if(session&&!session.finished&&!confirm('現在の学習を終了して、新しく始めますか？'))return;
   const options=Object.fromEntries(new FormData(e.target));options.count=Number(options.count);
-  $('#start').disabled=true;$('#status').textContent=options.source==='ai'?'AIが問題と解説を作成しています（最大90秒程度）…':'問題を準備中…';
-  try{const r=await fetch('/api/questions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(options)});const d=await r.json();if(!r.ok)throw new Error(d.error);if(!d.questions?.length)throw new Error('条件に合う問題がありません。');session={options,questions:d.questions,notice:d.notice,source:d.source,index:0,answers:d.questions.map(()=>''),ratings:{},revealed:{},hints:{},finished:false};$('#status').textContent=d.notice;render();}catch(err){$('#status').textContent=err.message;}finally{$('#start').disabled=false;}
+  const questions=selectQuestions(bank,options);
+  if(!questions.length){$('#status').textContent='条件に合う問題がありません。';return;}
+  const notice=questions.length<options.count?`この条件の収録問題は${questions.length}問です。全問を出題します。`:'';
+  session={options,questions,notice,index:0,answers:questions.map(()=>''),ratings:{},revealed:{},hints:{},finished:false};
+  $('#status').textContent=notice;render();
 };
 function render(){
   const s=session,root=$('#study');root.replaceChildren();if(s.finished)return results(root);
   const q=s.questions[s.index],test=s.options.kind==='総合',card=el('div',undefined,'card');
   const top=el('div',undefined,'topline');top.append(el('span',`${q.kind} / ${q.level} / ${q.topic}`,'badge'),el('span',`${s.index+1} / ${s.questions.length}`,'muted'));card.append(top);
-  const progress=el('progress');progress.max=s.questions.length;progress.value=s.index;card.append(progress,el('p',s.source==='ai'?'AI生成問題':'収録問題','eyebrow'),el('h2',q.title),mathEl('p',q.question,'question'));
+  const progress=el('progress');progress.max=s.questions.length;progress.value=s.index;card.append(progress,el('p','収録問題から自動作成','eyebrow'),el('h2',q.title),mathEl('p',q.question,'question'));
   const label=el('label',test?'あなたの答案（解説はテスト終了後に表示）':'あなたの答案・考え方');const input=el('textarea');input.value=s.answers[s.index];input.placeholder='使う定義や定理、考えた手順を書いてみましょう。';input.oninput=()=>{s.answers[s.index]=input.value;};label.append(input);card.append(label);
   const actions=el('div',undefined,'actions');
   if(!test){actions.append(btn(s.hints[s.index]?'ヒントを閉じる':'ヒントを見る',()=>{s.hints[s.index]=!s.hints[s.index];render();}),btn('解答・解説を見る',()=>{s.revealed[s.index]=true;render();}));}
@@ -34,5 +39,4 @@ function rating(index){const wrap=el('div');wrap.append(el('p','模範解答と�
 function updateSummary(){const ratings=Object.values(session.ratings);$('#summary').textContent=`理解できた ${ratings.filter(v=>v==='理解できた').length}問 / ${session.questions.length}問（自己評価済み ${ratings.length}問）`;}
 function results(root){const card=el('div',undefined,'card');card.append(el('p','SESSION COMPLETE','eyebrow'),el('h2','今日の学びを振り返る'));const summary=el('p');summary.id='summary';card.append(summary,el('p','証明・記述の正誤は自動判定しません。自分の答案と模範解答を比較し、理解度を記録しましょう。','muted'));
 session.questions.forEach((q,i)=>{const detail=el('details',undefined,'review');detail.append(el('summary',`${i+1}. ${q.title} · ${q.kind}`),el('h3','あなたの答案'),el('p',session.answers[i]||'未記入'),mathEl('p',`ヒント：${q.hint}`,'muted'),explain(q),rating(i));card.append(detail);});card.append(btn('復習メモを保存',download));root.append(card);updateSummary();}
-function download(){const s=session;const text=['解析のアトリエ / 学習の記録',`出題：${s.source==='ai'?'AI生成':'収録問題'} / ${s.options.level}`,...s.questions.flatMap((q,i)=>[`\n${i+1}. ${q.title}`,q.question,`\n自分の答案：${s.answers[i]||'未記入'}`,`自己評価：${s.ratings[i]||'未評価'}`,`\n解答：${q.answer}`,...q.steps,`具体例：${q.example}`,`注意点：${q.pitfall}`])].join('\n');const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));const a=el('a');a.href=url;a.download='解析学-復習メモ.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-init();
+function download(){const s=session;const text=['解析のアトリエ / 学習の記録',`出題：収録問題 / ${s.options.level}`,...s.questions.flatMap((q,i)=>[`\n${i+1}. ${q.title}`,q.question,`\n自分の答案：${s.answers[i]||'未記入'}`,`自己評価：${s.ratings[i]||'未評価'}`,`\n解答：${q.answer}`,...q.steps,`具体例：${q.example}`,`注意点：${q.pitfall}`])].join('\n');const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));const a=el('a');a.href=url;a.download='解析学-復習メモ.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
